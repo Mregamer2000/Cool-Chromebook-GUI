@@ -1,183 +1,37 @@
 javascript:(function(){
-  // Prevent multiple instances
-  if (window._bmGUI) {
-    document.body.removeChild(window._bmGUI);
-    delete window._bmGUI;
+  // If panel exists, remove it
+  if (window.__bmPanel) {
+    window.__bmPanel.remove();
+    delete window.__bmPanel;
     return;
   }
 
-  // Inject CSS
-  const css = `
-    #bm-gui {
-      position: fixed;
-      top: 50px;
-      right: 20px;
-      width: 300px;
-      height: 400px;
-      background: #fff;
-      border: 2px solid #444;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-      z-index: 999999;
-      display: flex;
-      flex-direction: column;
-      font-family: sans-serif;
-    }
-    #bm-gui.dark {
-      background: #222;
-      color: #ddd;
-      border-color: #888;
-    }
-    #bm-gui header {
-      padding: 6px;
-      background: #444;
-      color: #fff;
-      cursor: move;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    #bm-gui header button {
-      background: transparent;
-      border: none;
-      color: inherit;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    #bm-gui .controls {
-      padding: 6px;
-      border-bottom: 1px solid #ccc;
-      display: flex;
-      gap: 4px;
-    }
-    #bm-gui.dark .controls { border-color: #555; }
-    #bm-gui input[type="text"] {
-      flex: 1;
-      padding: 4px;
-      font-size: 14px;
-    }
-    #bm-gui textarea {
-      flex: 1;
-      margin: 6px;
-      padding: 4px;
-      font-size: 13px;
-      resize: none;
-    }
-    .bm-highlight {
-      background: yellow;
-    }
-  `;
-  const style = document.createElement('style');
-  style.textContent = css;
-  document.head.appendChild(style);
+  // Create panel
+  const panel = document.createElement('div');
+  panel.id = '__bmPanel';
+  panel.style.cssText = [
+    'position:fixed',
+    'top:20px',
+    'right:20px',
+    'width:200px',
+    'padding:10px',
+    'background:#fff',
+    'border:2px solid #444',
+    'box-shadow:0 0 10px rgba(0,0,0,0.3)',
+    'z-index:2147483647'
+  ].join(';');
 
-  // Build GUI container
-  const gui = document.createElement('div');
-  gui.id = 'bm-gui';
-  window._bmGUI = gui;
+  // Close button
+  const btn = document.createElement('button');
+  btn.textContent = 'Close';
+  btn.style.cursor = 'pointer';
+  btn.onclick = () => panel.remove();
 
-  // Header (drag / close)
-  const header = document.createElement('header');
-  header.innerHTML = '<span>🔖 Bookmarklet GUI</span>';
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✖';
-  closeBtn.onclick = () => gui.remove();
-  header.appendChild(closeBtn);
-  gui.appendChild(header);
+  // Add content
+  panel.innerHTML = '<strong>Bookmarklet GUI</strong><br/>';
+  panel.appendChild(btn);
 
-  // Control row: search + highlight / clear + dark toggle
-  const ctrl = document.createElement('div');
-  ctrl.className = 'controls';
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.placeholder = 'Search term…';
-  const btnH = document.createElement('button');
-  btnH.textContent = '🔍';
-  const btnC = document.createElement('button');
-  btnC.textContent = '🧹';
-  const btnD = document.createElement('button');
-  btnD.textContent = '🌓';
-  ctrl.append(input, btnH, btnC, btnD);
-  gui.appendChild(ctrl);
-
-  // Note area
-  const note = document.createElement('textarea');
-  note.placeholder = 'Your notes…';
-  gui.appendChild(note);
-
-  // Load saved notes
-  const NOTE_KEY = 'bm_gui_notes';
-  note.value = localStorage.getItem(NOTE_KEY) || '';
-  note.oninput = () => localStorage.setItem(NOTE_KEY, note.value);
-
-  // Search & highlight
-  function highlight(term) {
-    clearHighlight();
-    if (!term) return;
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    const nodes = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
-    nodes.forEach(n => {
-      const idx = n.textContent.toLowerCase().indexOf(term.toLowerCase());
-      if (idx >= 0) {
-        const span = document.createElement('span');
-        span.className = 'bm-highlight';
-        const matched = n.splitText(idx);
-        const after = matched.splitText(term.length);
-        const clone = matched.cloneNode(true);
-        span.appendChild(clone);
-        matched.parentNode.replaceChild(span, matched);
-      }
-    });
-  }
-  function clearHighlight() {
-    document.querySelectorAll('.bm-highlight').forEach(span => {
-      span.replaceWith(...span.childNodes);
-    });
-  }
-
-  btnH.onclick = () => highlight(input.value);
-  btnC.onclick = clearHighlight;
-
-  // Dark-mode toggle
-  btnD.onclick = () => {
-    document.body.classList.toggle('bm-page-dark');
-    gui.classList.toggle('dark');
-  };
-
-  // Optional page dark style
-  const darkCss = document.createElement('style');
-  darkCss.textContent = `
-    .bm-page-dark {
-      background: #111 !important;
-      color: #ddd !important;
-    }
-    .bm-page-dark * {
-      background: transparent !important;
-      color: inherit !important;
-      border-color: #444 !important;
-    }
-  `;
-  document.head.appendChild(darkCss);
-
-  // Draggable behavior
-  let isDragging = false, startX, startY, origX, origY;
-  header.addEventListener('mousedown', e => {
-    isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    const rect = gui.getBoundingClientRect();
-    origX = rect.left;
-    origY = rect.top;
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
-    gui.style.left = origX + dx + 'px';
-    gui.style.top  = origY + dy + 'px';
-  });
-  document.addEventListener('mouseup', () => isDragging = false);
-
-  // Append to page
-  document.body.appendChild(gui);
+  // Append
+  document.body.appendChild(panel);
+  window.__bmPanel = panel;
 })();
